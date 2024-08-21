@@ -20,7 +20,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install mlflow==2.13.0 langchain==0.2.0 databricks-sdk==0.18.0 pydantic==2.5.2 pinecone-client==3.2.2 langchain-pinecone==0.1.1 lxml==4.9.3 cloudpickle==2.2.1 langchain-community==0.2.0
+# MAGIC %pip install -U mlflow==2.15.1 pinecone-client==5.0.1 langchain-pinecone==0.1.3 langchain==0.2.0 databricks-sdk==0.30.0 langchain-community==0.2.0
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
@@ -35,16 +35,16 @@ host = "https://" + spark.conf.get("spark.databricks.workspaceUrl")
 
 pinecone_index_name = "dbdemo-index"
 pinecone_namespace = 'dbdemo-namespace'
-pinecone_api_key = dbutils.secrets.get("prasad_kona", "PINECONE_API_KEY")
-os.environ["PINECONE_API_KEY"] = dbutils.secrets.get("prasad_kona", "PINECONE_API_KEY")
-#os.environ['DATABRICKS_TOKEN'] = dbutils.secrets.get("prasad_kona", "DATABRICKS_TOKEN")
+pinecone_api_key = dbutils.secrets.get("pinecone_secrets_scope", "PINECONE_API_KEY")
+os.environ["PINECONE_API_KEY"] = dbutils.secrets.get("pinecone_secrets_scope", "PINECONE_API_KEY")
+#os.environ['DATABRICKS_TOKEN'] = dbutils.secrets.get("pinecone_secrets_scope", "DATABRICKS_TOKEN")
 #pinecone_api_key = os.environ["PINECONE_API_KEY"]
 
 catalog = "prasad_kona_dev"
 db = "rag_chatbot_prasad_kona"
 
 # Set a debug flag
-debug_flag = False
+debug_flag = True
 
 
 # COMMAND ----------
@@ -111,10 +111,10 @@ with mlflow.start_run():
         example_no_conversion=True, # required to allow the schema to work
         extra_pip_requirements=[ 
           "mlflow==" + mlflow.__version__,
-          "langchain==" + langchain.__version__,
-          "pinecone-client==3.2.2",
-          "langchain-pinecone==0.1.1",
-          "langchain-community",
+          "langchain==0.2.0" ,
+          "pinecone-client==5.0.1",
+          "langchain-pinecone==0.1.3",
+          "langchain-community==0.2.0"
         ]
     )
 
@@ -227,6 +227,7 @@ from databricks.sdk import WorkspaceClient
 w = WorkspaceClient()
 serving_endpoint_name = "pinecone_rag_chain"
 latest_model_version = get_latest_model_version(model_name)
+print("latest_model_version="+str(latest_model_version))
 
 # COMMAND ----------
 

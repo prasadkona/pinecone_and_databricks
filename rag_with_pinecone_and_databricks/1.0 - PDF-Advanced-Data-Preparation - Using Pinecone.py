@@ -30,8 +30,7 @@
 # COMMAND ----------
 
 # DBTITLE 1,Install required external libraries 
-# MAGIC %pip install transformers==4.30.2 "unstructured[pdf,docx]==0.10.30" langchain==0.1.5 llama-index==0.9.3 pydantic==1.10.9 mlflow==2.10.1 pinecone-client==4.1.0
-# MAGIC
+# MAGIC %pip install -U transformers==4.41.1 pypdf==4.1.0 langchain-text-splitters==0.2.0 mlflow==2.15.1 tiktoken==0.7.0 torch==2.3.0 llama-index==0.10.43 pinecone-client==5.0.1
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
@@ -125,39 +124,31 @@ df = (spark.readStream
 
 # COMMAND ----------
 
-# DBTITLE 1,To extract our PDF,  we'll need to setup libraries in our nodes
-#For production use-case, install the libraries at your cluster level with an init script instead. 
-install_ocr_on_nodes()
+# DBTITLE 1,To extract our PDF,  we'll need to setup libraries in our nodes and define an extract function
+import warnings
+from pypdf import PdfReader
+
+def parse_bytes_pypdf(raw_doc_contents_bytes: bytes):
+    try:
+        pdf = io.BytesIO(raw_doc_contents_bytes)
+        reader = PdfReader(pdf)
+        parsed_content = [page_content.extract_text() for page_content in reader.pages]
+        return "\n".join(parsed_content)
+    except Exception as e:
+        warnings.warn(f"Exception {e} has been thrown during parsing")
+        return None
 
 # COMMAND ----------
 
-# MAGIC %md 
+# MAGIC %md
 # MAGIC Let's start by extracting text from our PDF.
 
 # COMMAND ----------
 
-# DBTITLE 1,Transform pdf as text
-from unstructured.partition.auto import partition
-import re
-import os
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
-
-def extract_doc_text(x : bytes) -> str:
-  # Read files and extract the values with unstructured
-  sections = partition(file=io.BytesIO(x))
-  def clean_section(txt):
-    txt = re.sub(r'\n', '', txt)
-    return re.sub(r' ?\.', '.', txt)
-  # Default split is by section of document, concatenate them all together because we want to split by sentence instead.
-  return "\n".join([clean_section(s.text) for s in sections]) 
-
-# COMMAND ----------
-
-#Let's try our text extraction function with a single pdf file
 import io
 import re
 with requests.get('https://github.com/databricks-demos/dbdemos-dataset/blob/main/llm/databricks-pdf-documentation/Databricks-Customer-360-ebook-Final.pdf?raw=true') as pdf:
-  doc = extract_doc_text(pdf.content)  
+  doc = parse_bytes_pypdf(pdf.content)  
   print(doc)
 
 # COMMAND ----------
@@ -169,23 +160,26 @@ with requests.get('https://github.com/databricks-demos/dbdemos-dataset/blob/main
 
 # COMMAND ----------
 
-from llama_index.langchain_helpers.text_splitter import SentenceSplitter
-from llama_index import Document, set_global_tokenizer
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core import Document, set_global_tokenizer
 from transformers import AutoTokenizer
+from typing import Iterator
 
 # Reduce the arrow batch size as our PDF can be big in memory
 spark.conf.set("spark.sql.execution.arrow.maxRecordsPerBatch", 10)
 
 @pandas_udf("array<string>")
 def read_as_chunk(batch_iter: Iterator[pd.Series]) -> Iterator[pd.Series]:
-    #set llama2 as tokenizer
+    #set llama2 as tokenizer to match our model size (will stay below gte 1024 limit)
     set_global_tokenizer(
       AutoTokenizer.from_pretrained("hf-internal-testing/llama-tokenizer")
     )
     #Sentence splitter from llama_index to split on sentences
-    splitter = SentenceSplitter(chunk_size=500, chunk_overlap=50)
+    splitter = SentenceSplitter(chunk_size=500, chunk_overlap=10)
     def extract_and_split(b):
-      txt = extract_doc_text(b)
+      txt = parse_bytes_pypdf(b)
+      if txt is None:
+        return []
       nodes = splitter.get_nodes_from_documents([Document(text=txt)])
       return [n.text for n in nodes]
 
@@ -314,10 +308,10 @@ print(get_embedding_for_string("What is a lakehouse ?"))
 # COMMAND ----------
 
 # Delete checkpoint for the pdf_raw table streaming query
-dbutils.fs.rm(f'{folder}/checkpoints/pdf_chunks_{catalog}_{db}', True)
+#dbutils.fs.rm(f'{folder}/checkpoints/pdf_chunks_{catalog}_{db}', True)
 
 # Delete checkpoint for the databricks_documentation table streaming query
-dbutils.fs.rm(f'{folder}/checkpoints/docs_chunks_{catalog}_{db}', True)
+#dbutils.fs.rm(f'{folder}/checkpoints/docs_chunks_{catalog}_{db}', True)
 
 # COMMAND ----------
 
@@ -329,7 +323,7 @@ dbutils.fs.rm(f'{folder}/checkpoints/docs_chunks_{catalog}_{db}', True)
       .selectExpr('path as url', 'content', 'embedding')
   .writeStream
     .trigger(availableNow=True)
-    .option("checkpointLocation", f'{folder}/checkpoints/pdf_chunks_{catalog}_{db}')
+    .option("checkpointLocation", f'{folder}/checkpoints/pdf_chunks{catalog}_{db}')
     .table('databricks_pdf_documentation').awaitTermination())
 
 #Let's also add our documentation web page from the simple demo (make sure you run the simple demo for it to work)
@@ -400,7 +394,7 @@ display(df2.limit(1))
 # DBTITLE 1,Initialize Pinecone client configs
 # Initialize pinecone variables
 
-api_key = dbutils.secrets.get("prasad_kona", "PINECONE_API_KEY")
+api_key = dbutils.secrets.get("pinecone_secrets_scope", "PINECONE_API_KEY")
 project_name = "Starter"
 index_name = "dbdemo-index"
 
@@ -408,6 +402,7 @@ index_name = "dbdemo-index"
 
 # COMMAND ----------
 
+# DBTITLE 1,Write to pinecone
 (  
     df.write  
     .option("pinecone.apiKey", api_key) 

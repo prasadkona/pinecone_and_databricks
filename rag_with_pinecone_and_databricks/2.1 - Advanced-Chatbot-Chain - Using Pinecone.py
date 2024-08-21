@@ -20,7 +20,8 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install mlflow==2.13.0 langchain==0.2.0 databricks-sdk==0.18.0 pydantic==2.5.2 pinecone-client==3.2.2 langchain-pinecone==0.1.1 lxml==4.9.3 cloudpickle==2.2.1 langchain-community==0.2.0
+# MAGIC %pip install -U mlflow==2.15.1 pinecone-client==5.0.1 langchain-pinecone==0.1.3 langchain==0.2.10
+# MAGIC
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
@@ -44,15 +45,15 @@ debug_flag = False
 if debug_flag:
   ###### uncomment the next 3 lines to test this notebook
   ###### comment the next 3 lines to run the driver notebook for deploy to UC and model serving
-  #pinecone_api_key = dbutils.secrets.get("prasad_kona", "PINECONE_API_KEY")
-  #os.environ["PINECONE_API_KEY"] = dbutils.secrets.get("prasad_kona", "PINECONE_API_KEY")
-  #os.environ['DATABRICKS_TOKEN'] = dbutils.secrets.get("prasad_kona", "DATABRICKS_TOKEN")
+  #pinecone_api_key = dbutils.secrets.get("pinecone_secrets_scope", "PINECONE_API_KEY")
+  #os.environ["PINECONE_API_KEY"] = dbutils.secrets.get("pinecone_secrets_scope", "PINECONE_API_KEY")
+  #os.environ['DATABRICKS_TOKEN'] = dbutils.secrets.get("pinecone_secrets_scope", "DATABRICKS_TOKEN")
   pinecone_api_key = os.environ["PINECONE_API_KEY"]
 else:
   pinecone_api_key = os.environ["PINECONE_API_KEY"]
-  #pinecone_api_key = dbutils.secrets.get("prasad_kona", "PINECONE_API_KEY")
-  #os.environ["PINECONE_API_KEY"] = dbutils.secrets.get("prasad_kona", "PINECONE_API_KEY")
-  #os.environ['DATABRICKS_TOKEN'] = dbutils.secrets.get("prasad_kona", "DATABRICKS_TOKEN")
+  #pinecone_api_key = dbutils.secrets.get("pinecone_secrets_scope", "PINECONE_API_KEY")
+  #os.environ["PINECONE_API_KEY"] = dbutils.secrets.get("pinecone_secrets_scope", "PINECONE_API_KEY")
+  #os.environ['DATABRICKS_TOKEN'] = dbutils.secrets.get("pinecone_secrets_scope", "DATABRICKS_TOKEN")
 
 # COMMAND ----------
 
